@@ -466,9 +466,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'Pune City
-
-'
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1160,7 +1158,7 @@ GameObject:
   - component: {fileID: 2134091678175080862}
   - component: {fileID: 2967852929400941309}
   m_Layer: 5
-  m_Name: FuelPrice (1)
+  m_Name: Current City
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1183,8 +1181,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
-  m_AnchoredPosition: {x: -116, y: -1417}
-  m_SizeDelta: {x: 438.259, y: 50}
+  m_AnchoredPosition: {x: -157, y: -1432}
+  m_SizeDelta: {x: 335.13, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2134091678175080862
 CanvasRenderer:
@@ -1377,6 +1375,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8ec1a8c26048be045b169a82aeac0709, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cityNameText: {fileID: 8591154105761514134}
+  startTripButton: {fileID: 671194308510428609}
+  startTripButtonText: {fileID: 3877846965241601378}
+  tripActive: 0
 --- !u!1 &6592661902471811733
 GameObject:
   m_ObjectHideFlags: 0

@@ -23,7 +23,7 @@ public class StartUpPermissions : MonoBehaviour
             Destroy(gameObject);
         }
     }
-    
+
     private string savedCityKey = "SavedCity";
 
     void Start()
@@ -33,45 +33,45 @@ public class StartUpPermissions : MonoBehaviour
 
     IEnumerator GetLocation()
     {
-        #if UNITY_EDITOR
-            float latitude = 18.5204f;  // Pune
-            float longitude = 73.8567f;
-            yield return StartCoroutine(GetCityName(latitude, longitude));
-            yield break;  // Ensure method exits correctly
-        #else
-            if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
-            {
-                Permission.RequestUserPermission(Permission.FineLocation);
-                ShowToast("Location permission needed!", true);
-                yield break;  // Stop coroutine
-            }
+#if UNITY_EDITOR
+        float latitude = 22.5744f;  // Pune
+        float longitude = 88.3629f;
+        yield return StartCoroutine(GetCityName(latitude, longitude));
+        yield break;  // Ensure method exits correctly
+#else
+        if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
+        {
+            Permission.RequestUserPermission(Permission.FineLocation);
+            ShowToast("Location permission needed!", true);
+            yield break;  // Stop coroutine
+        }
 
-            if (!Input.location.isEnabledByUser)
-            {
-                ShowToast("Please enable location services!", true);
-                yield break;  // Stop coroutine
-            }
+        if (!Input.location.isEnabledByUser)
+        {
+            ShowToast("Please enable location services!", true);
+            yield break;  // Stop coroutine
+        }
 
-            Input.location.Start();
-            int maxWait = 20;
-            while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
-            {
-                yield return new WaitForSeconds(1);
-                maxWait--;
-            }
+        Input.location.Start();
+        int maxWait = 20;
+        while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
+        {
+            yield return new WaitForSeconds(1);
+            maxWait--;
+        }
 
-            if (Input.location.status != LocationServiceStatus.Running)
-            {
-                ShowToast("Failed to get location", true);
-                yield break;  // Stop coroutine
-            }
+        if (Input.location.status != LocationServiceStatus.Running)
+        {
+            ShowToast("Failed to get location", true);
+            yield break;  // Stop coroutine
+        }
 
-            float latitude = Input.location.lastData.latitude;
-            float longitude = Input.location.lastData.longitude;
-            Input.location.Stop();
-            
-            yield return StartCoroutine(GetCityName(latitude, longitude));  // Ensure coroutine completes
-        #endif
+        float latitude = Input.location.lastData.latitude;
+        float longitude = Input.location.lastData.longitude;
+        Input.location.Stop();
+
+        yield return StartCoroutine(GetCityName(latitude, longitude));  // Ensure coroutine completes
+#endif
     }
 
 
@@ -108,7 +108,7 @@ public class StartUpPermissions : MonoBehaviour
 
     private void ShowToast(string message, bool isLongDuration)
     {
-        #if UNITY_ANDROID
+#if UNITY_ANDROID && !UNITY_EDITOR
         AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
         AndroidJavaObject currentActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
         AndroidJavaObject context = currentActivity.Call<AndroidJavaObject>("getApplicationContext");
@@ -119,8 +119,8 @@ public class StartUpPermissions : MonoBehaviour
             AndroidJavaObject toastObject = toastClass.CallStatic<AndroidJavaObject>("makeText", context, message, isLongDuration ? 1 : 0);
             toastObject.Call("show");
         }));
-        #else
+#else
         Debug.Log(message);
-        #endif
+#endif
     }
 }

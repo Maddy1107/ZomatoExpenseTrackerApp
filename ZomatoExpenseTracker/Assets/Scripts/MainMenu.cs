@@ -1,47 +1,44 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class MainMenu : MonoBehaviour
 {
+    public TMP_Text cityNameText;
+
+    public Button startTripButton;
+    public TMP_Text startTripButtonText;
+
+    public bool tripActive = false;
+
+    public TripManager tripPopup;
+
     void OnEnable()
     {
-        StartCoroutine(GetCurrentLocation());
+        cityNameText.text = PlayerPrefs.GetString("SavedCity");
+
+
+        tripPopup = FindObjectOfType<TripManager>(true);
     }
 
-    private IEnumerator GetCurrentLocation()
+    private void StartTrip()
     {
-        if (!Input.location.isEnabledByUser)
-        {
-            Debug.Log("Location services are not enabled by the user.");
-            yield break;
-        }
+        tripActive = true;
+        startTripButton.onClick.AddListener(tripActive ? EndTrip : StartTrip);
+        tripPopup.gameObject.SetActive(true);
+        tripPopup.ShowPopup(true);
+        startTripButtonText.text = "End Trip";
+    }
 
-        Input.location.Start();
-
-        int maxWait = 20;
-        while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
-        {
-            yield return new WaitForSeconds(1);
-            maxWait--;
-        }
-
-        if (maxWait <= 0)
-        {
-            Debug.Log("Timed out");
-            yield break;
-        }
-
-        if (Input.location.status == LocationServiceStatus.Failed)
-        {
-            Debug.Log("Unable to determine device location");
-            yield break;
-        }
-        else
-        {
-            Debug.Log("Location: " + Input.location.lastData.latitude + " " + Input.location.lastData.longitude);
-        }
-
-        Input.location.Stop();
+    private void EndTrip()
+    {
+        tripActive = false;
+        startTripButton.onClick.AddListener(tripActive ? EndTrip : StartTrip);
+        tripPopup.gameObject.SetActive(true);
+        tripPopup.ShowPopup(false);
+        startTripButtonText.text = "Start Trip";
     }
 }
