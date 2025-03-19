@@ -1,6 +1,7 @@
 using UnityEngine;
 using TMPro;
 using System;
+using System.Collections.Generic;
 
 public class TripManager : MonoBehaviour {
     public GameObject tripPopup;  // Popup UI
@@ -8,19 +9,23 @@ public class TripManager : MonoBehaviour {
     public TMP_InputField startTripReading, endTripReading;  // Input for odometer readings
     public TMP_InputField earningsInput, expensesInput;  // Fields for earnings & other expenses
     public TextMeshProUGUI fuelExpenseText;  // Auto-calculated fuel expense
-
-    public GameObject start,end;
+    public GameObject start, end;
 
     private bool tripActive = false;
     private float startOdometer;
     private DateTime startTime;
+    private List<TripData> trips = new List<TripData>();
 
-    void OnEnable()
-    {
-        start.SetActive(false);
-        end.SetActive(false);   
+    void Start() {
+        LoadTrips();
+        tripButtonText.text = tripActive ? "End Trip" : "Start Trip";
     }
-    
+
+    void OnEnable() {
+        start.SetActive(false);
+        end.SetActive(false);
+    }
+
     // Show the popup when clicking "Start Trip" or "End Trip"
     public void ShowTripPopup() {
         tripPopup.SetActive(true);
@@ -35,8 +40,8 @@ public class TripManager : MonoBehaviour {
             expensesInput.gameObject.SetActive(false);
             fuelExpenseText.gameObject.SetActive(false);
         } else {
-            end.SetActive(true);
             // Ending a trip
+            end.SetActive(true);
             tripPopup.transform.Find("Title").GetComponent<TextMeshProUGUI>().text = "End Trip";
             startTripReading.interactable = false;
             endTripReading.text = "";
@@ -59,17 +64,20 @@ public class TripManager : MonoBehaviour {
             }
         } else {
             // End trip
-            if (float.TryParse(startTripReading.text, out float endOdometer)) {
+            if (float.TryParse(endTripReading.text, out float endOdometer) &&
+                float.TryParse(earningsInput.text, out float earnings) &&
+                float.TryParse(expensesInput.text, out float otherExpenses)) {
+
                 float distance = endOdometer - startOdometer;
                 float mileage = PlayerPrefs.GetFloat("Mileage", 40f);  // Default 40km/L if not set
                 float fuelPrice = PlayerPrefs.GetFloat("FuelPrice", 100f);  // Default ₹100/L if not fetched
-                float fuelExpense = distance / mileage * fuelPrice;
+                float fuelExpense = (distance / mileage) * fuelPrice;
 
                 fuelExpenseText.text = "Fuel Expense: ₹" + fuelExpense.ToString("F2");
 
                 // Save Trip Details
-                SaveTrip(distance, fuelExpense);
-                
+                SaveTrip(distance, fuelExpense, earnings, otherExpenses);
+
                 tripActive = false;
                 tripButtonText.text = "Start Trip";
                 tripPopup.SetActive(false);
@@ -77,11 +85,49 @@ public class TripManager : MonoBehaviour {
         }
     }
 
-    // Save trip details
-    void SaveTrip(float distance, float fuelExpense) {
-        PlayerPrefs.SetFloat("LastTripDistance", distance);
-        PlayerPrefs.SetFloat("LastTripFuelExpense", fuelExpense);
-        PlayerPrefs.SetString("LastTripDate", DateTime.Now.ToString());
+    void SaveTrip(float distance, float fuelExpense, float earnings, float otherExpenses) {
+        TripData trip = new TripData {
+            date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            duration = (System.DateTime.Now - startTime).ToString(@"hh\:mm"),
+            distance = distance,
+            fuelExpense = fuelExpense,
+            earnings = earnings,
+            otherExpenses = otherExpenses,
+            profit = earnings - (fuelExpense + otherExpenses)
+        };
+
+        trips.Add(trip);
+        SaveTripsToPrefs();
+    }
+
+    void SaveTripsToPrefs() {
+        string json = JsonUtility.ToJson(new TripListWrapper { trips = trips });
+        PlayerPrefs.SetString("TripData", json);
         PlayerPrefs.Save();
     }
+
+    void LoadTrips() {
+        string json = PlayerPrefs.GetString("TripData", "{}");
+        TripListWrapper tripWrapper = JsonUtility.FromJson<TripListWrapper>(json);
+
+        if (tripWrapper != null && tripWrapper.trips != null) {
+            trips = tripWrapper.trips;
+        }
+    }
+}
+
+[System.Serializable]
+public class TripData {
+    public string date;
+    public string duration;
+    public float distance;
+    public float fuelExpense;
+    public float earnings;
+    public float otherExpenses;
+    public float profit;
+}
+
+[System.Serializable]
+public class TripListWrapper {
+    public List<TripData> trips;
 }

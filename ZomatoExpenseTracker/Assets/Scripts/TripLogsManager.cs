@@ -32,14 +32,3 @@ public class TripLogsManager : MonoBehaviour {
         tripDetailsPopup.SetActive(true);
     }
 }
-
-[System.Serializable]
-public class TripData {
-    public string date;
-    public string duration;
-    public float distance;
-    public float fuelExpense;
-    public float earnings;
-    public float otherExpenses;
-    public float profit;
-}
