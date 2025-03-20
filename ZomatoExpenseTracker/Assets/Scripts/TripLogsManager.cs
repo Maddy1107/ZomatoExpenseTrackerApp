@@ -1,34 +1,103 @@
-// using UnityEngine;
-// using TMPro;
-// using System.Collections.Generic;
+using UnityEngine;
+using TMPro;
+using System.Collections.Generic;
+using System.IO;
+using Newtonsoft.Json;
+using UnityEngine.UI;
+using System;
+using Unity.VisualScripting;
 
-// public class TripLogsManager : MonoBehaviour {
-//     public GameObject tripItemPrefab;  // Trip item template prefab
-//     public Transform tripListContent;  // Content panel inside Scroll View
-//     public GameObject tripDetailsPopup;  // Popup for trip details
-//     public TextMeshProUGUI tripDetailsText;  // Text in popup
+public class TripLogsManager : MonoBehaviour
+{
+    private static TripLogsManager instance;
+    public GameObject tripItemPrefab; // Prefab for individual trip entries
+    public GameObject monthHeaderPrefab; // Prefab for expandable month sections
+    public Transform scrollViewContent; // Parent for instantiated objects
 
-//     private List<TripData> trips = new List<TripData>();
+    private string tripFilePath;
+    private Dictionary<string, List<TripData>> tripsByMonth = new Dictionary<string, List<TripData>>();
+    
+    public static void OpenTripLogs()
+    {
+        if (instance == null)
+        {
+            instance = FindObjectOfType<TripLogsManager>(true);
+            if (instance == null)
+            {
+                Debug.LogError("TripManager is missing in the scene!");
+                return;
+            }
+        }
+        instance.gameObject.SetActive(true);
+    }
 
-//     void Start() {
-//         LoadTrips();
-//     }
+    private void Awake()
+    {
+        tripFilePath = Path.Combine(Application.persistentDataPath, "trips.json");
+        LoadTrips();
+    }
 
-//     void LoadTrips() {
-//         tripListContent.DetachChildren();
+    private void LoadTrips()
+    {
+        if (!File.Exists(tripFilePath))
+        {
+            Debug.LogError("Trip file not found: " + tripFilePath);
+            return;
+        }
 
-//         foreach (TripData trip in trips) {
-//             GameObject tripItem = Instantiate(tripItemPrefab, tripListContent);
-//             tripItem.transform.Find("DateText").GetComponent<TextMeshProUGUI>().text = trip.date;
-//             tripItem.transform.Find("DurationText").GetComponent<TextMeshProUGUI>().text = trip.duration;
-//             tripItem.transform.Find("ProfitText").GetComponent<TextMeshProUGUI>().text = "₹" + trip.profit;
+        string json = File.ReadAllText(tripFilePath);
+        List<TripData> allTrips = JsonConvert.DeserializeObject<List<TripData>>(json) ?? new List<TripData>();
 
-//             tripItem.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(() => ShowTripDetails(trip));
-//         }
-//     }
+        tripsByMonth.Clear();
+        foreach (TripData trip in allTrips)
+        {
+            string monthKey = trip.date.ToString("MMMM yyyy"); // Example: "March 2025"
 
-//     void ShowTripDetails(TripData trip) {
-//         tripDetailsText.text = $"Date: {trip.date}\nDuration: {trip.duration}\nDistance: {trip.distance} km\nFuel: ₹{trip.fuelExpense}\nEarnings: ₹{trip.earnings}\nOther Expenses: ₹{trip.otherExpenses}";
-//         tripDetailsPopup.SetActive(true);
-//     }
-// }
+            if (!tripsByMonth.ContainsKey(monthKey))
+            {
+                tripsByMonth[monthKey] = new List<TripData>();
+            }
+
+            tripsByMonth[monthKey].Add(trip);
+        }
+
+        PopulateTripLogs();
+    }
+
+    private void PopulateTripLogs()
+    {
+        foreach (Transform child in scrollViewContent)
+        {
+            Destroy(child.gameObject);
+        }
+
+        foreach (var monthEntry in tripsByMonth)
+        {
+            string monthName = monthEntry.Key;
+            List<TripData> monthTrips = monthEntry.Value;
+
+            GameObject monthHeaderObj = Instantiate(monthHeaderPrefab, scrollViewContent);
+            TMP_Text monthHeaderText = monthHeaderObj.GetComponentInChildren<TMP_Text>();
+            monthHeaderText.text = monthName;
+
+            Transform tripListContainer = monthHeaderObj.transform.Find("TripListContainer");
+            Button monthButton = monthHeaderObj.GetComponent<Button>();
+            monthButton.onClick.AddListener(() => ToggleMonthSection(tripListContainer));
+
+            tripListContainer.gameObject.SetActive(false); // Start collapsed
+
+            // Instantiate trip entries under this month
+            foreach (TripData trip in monthTrips)
+            {
+                GameObject tripItemObj = Instantiate(tripItemPrefab, tripListContainer);
+                TripItem tripUI = tripItemObj.GetComponent<TripItem>();
+                tripUI.SetTripData(trip);
+            }
+        }
+    }
+
+    private void ToggleMonthSection(Transform section)
+    {
+        section.gameObject.SetActive(!section.gameObject.activeSelf);
+    }
+}

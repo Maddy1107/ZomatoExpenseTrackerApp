@@ -1,6 +1,3 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,37 +5,42 @@ using UnityEngine.UI;
 public class MainMenu : MonoBehaviour
 {
     public TMP_Text cityNameText;
-
     public Button startTripButton;
     public TMP_Text startTripButtonText;
 
-    public bool tripActive = false;
-
-    public TripManager tripPopup;
+    public Button tripLogsButton;
 
     void OnEnable()
     {
-        cityNameText.text = PlayerPrefs.GetString("SavedCity");
+        cityNameText.text = PlayerPrefs.GetString("SavedCity", "Unknown City");
+        startTripButton.onClick.AddListener(ToggleTrip);
+        tripLogsButton.onClick.AddListener(OpenTripLogs);
+        
+        TripManager.OnTripStatusChanged += UpdateButtonText;
 
-
-        tripPopup = FindObjectOfType<TripManager>(true);
+        UpdateButtonText();
     }
 
-    private void StartTrip()
+    void OnDisable()
     {
-        tripActive = true;
-        startTripButton.onClick.AddListener(tripActive ? EndTrip : StartTrip);
-        tripPopup.gameObject.SetActive(true);
-        tripPopup.ShowPopup(true);
-        startTripButtonText.text = "End Trip";
+        TripManager.OnTripStatusChanged -= UpdateButtonText;
     }
 
-    private void EndTrip()
+    private void ToggleTrip()
     {
-        tripActive = false;
-        startTripButton.onClick.AddListener(tripActive ? EndTrip : StartTrip);
-        tripPopup.gameObject.SetActive(true);
-        tripPopup.ShowPopup(false);
-        startTripButtonText.text = "Start Trip";
+        TripManager.OpenTripPopup();
+        UpdateButtonText();
+    }
+
+    public void OpenTripLogs()
+    {
+        tripLogsButton.interactable = false;
+        TripLogsManager.OpenTripLogs();
+    }
+
+    private void UpdateButtonText()
+    {
+        bool tripActive = PlayerPrefs.GetInt("TripActive", 0) == 1;
+        startTripButtonText.text = tripActive ? "End Trip" : "Start Trip";
     }
 }

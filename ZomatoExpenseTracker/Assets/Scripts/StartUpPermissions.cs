@@ -34,7 +34,7 @@ public class StartUpPermissions : MonoBehaviour
     IEnumerator GetLocation()
     {
 #if UNITY_EDITOR
-        float latitude = 22.5744f;  // Pune
+        float latitude = 22.5744f;
         float longitude = 88.3629f;
         yield return StartCoroutine(GetCityName(latitude, longitude));
         yield break;  // Ensure method exits correctly
