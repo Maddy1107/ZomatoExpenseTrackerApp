@@ -13,13 +13,13 @@ public enum Filtertype
 public class CalendarDropDown : MonoBehaviour
 {
     public GameObject calendarPanel;   // The calendar UI panel
-    public Transform dateGrid, weekGrid, monthGrid; // Grids to hold date buttons   
+    public Transform dateGrid, monthWeekGrid; // Grids to hold date buttons   
     public Button dateButtonPrefab;    // Prefab for calendar date buttons
     public Button monthweekPrefab;
-    public TMP_Text selectedDateText;  // Displays selected date
+    public TMP_Text selectedDateText, headerText;  // Displays selected date
 
     public Button dailyButton, weeklyButton, monthlyButton, selectDateButton; // UI buttons
-
+    public Color selectedColor, defaultColor;
     public static Action<DateTime, DateTime> OnDateSelected;
 
     private DateTime selectedDate = DateTime.Now;
@@ -28,6 +28,8 @@ public class CalendarDropDown : MonoBehaviour
     private void Start()
     {
         calendarPanel.SetActive(false);
+        dateGrid.gameObject.SetActive(false);
+        monthWeekGrid.gameObject.SetActive(false);
 
         dailyButton.onClick.AddListener(() => SetFilter(Filtertype.Daily));
         weeklyButton.onClick.AddListener(() => SetFilter(Filtertype.Weekly));
@@ -39,14 +41,13 @@ public class CalendarDropDown : MonoBehaviour
 
     private void SetDefaultSelection()
     {
-        selectedDate = DateTime.Now;
-        filterType = Filtertype.Daily;
+        SetFilter(Filtertype.Daily);
         OnDateSelected?.Invoke(selectedDate, selectedDate);
     }
 
-    private void SetFilter(Filtertype type)
+    public void SetFilter(Filtertype filtertype)
     {
-        filterType = type;
+        filterType = filtertype;
         DateTime today = DateTime.Now;
 
         switch (filterType)
@@ -67,8 +68,16 @@ public class CalendarDropDown : MonoBehaviour
                 selectedDateText.text = selectedDate.ToString("MMMM yyyy");
                 break;
         }
+
+        UpdateButtonUI();
     }
 
+    private void UpdateButtonUI()
+    {
+        dailyButton.image.color = (filterType == Filtertype.Daily) ? selectedColor : defaultColor;
+        weeklyButton.image.color = (filterType == Filtertype.Weekly) ? selectedColor : defaultColor;
+        monthlyButton.image.color = (filterType == Filtertype.Monthly) ? selectedColor : defaultColor;
+    }
 
     private void OpenSelectionPanel()
     {
@@ -78,19 +87,23 @@ public class CalendarDropDown : MonoBehaviour
         {
             case Filtertype.Daily:
                 GenerateDailyCalendar(selectedDate.Year, selectedDate.Month);
+                headerText.text = selectedDate.ToString("MMMM yyyy");
                 break;
             case Filtertype.Weekly:
                 GenerateWeeklyRanges(selectedDate.Year);
+                headerText.text = "Select a week";
                 break;
             case Filtertype.Monthly:
                 GenerateMonthlySelection();
+                headerText.text = "Select a month";
                 break;
         }
     }
 
     private void GenerateDailyCalendar(int year, int month)
     {
-        ClearGrid();
+        dateGrid.gameObject.SetActive(true);
+
         int daysInMonth = DateTime.DaysInMonth(year, month);
 
         for (int day = 1; day <= daysInMonth; day++)
@@ -109,7 +122,8 @@ public class CalendarDropDown : MonoBehaviour
 
     private void GenerateWeeklyRanges(int year)
     {
-        ClearGrid();
+        monthWeekGrid.gameObject.SetActive(true);
+
         DateTime firstMonday = FirstMondayOfYear(year);
 
         for (int i = 0; i < 52; i++) // Generate 52 weeks
@@ -117,7 +131,7 @@ public class CalendarDropDown : MonoBehaviour
             DateTime weekStart = firstMonday.AddDays(i * 7);
             DateTime weekEnd = weekStart.AddDays(6);
 
-            Button weekButton = Instantiate(monthweekPrefab, weekGrid);
+            Button weekButton = Instantiate(monthweekPrefab, monthWeekGrid);
             weekButton.GetComponentInChildren<TMP_Text>().text = $"{weekStart:dd MMM} - {weekEnd:dd MMM}";
 
             DateTime selectedStart = weekStart;
@@ -132,11 +146,11 @@ public class CalendarDropDown : MonoBehaviour
 
     private void GenerateMonthlySelection()
     {
-        ClearGrid();
-
+        monthWeekGrid.gameObject.SetActive(true);
+        
         for (int month = 1; month <= 12; month++)
         {
-            Button monthButton = Instantiate(monthweekPrefab, monthGrid);
+            Button monthButton = Instantiate(monthweekPrefab, monthWeekGrid);
             monthButton.GetComponentInChildren<TMP_Text>().text = new DateTime(2025, month, 1).ToString("MMMM");
 
             int selectedMonth = month;
@@ -152,12 +166,19 @@ public class CalendarDropDown : MonoBehaviour
 
     private void SelectDateRange(DateTime startDate, DateTime endDate)
     {
-        selectedDateText.text = startDate == endDate
-            ? startDate.ToString("dd MMMM yyyy")  // Daily
-            : $"{startDate:dd MMM} - {endDate:dd MMM yyyy}";  // Weekly or Monthly
+        if (startDate == endDate)
+        {
+            selectedDateText.text = startDate.ToString("dd MMMM yyyy");  // Daily
+        }
+        else
+        {
+            selectedDateText.text = $"{startDate:dd MMM} - {endDate:dd MMM yyyy}";  // Weekly or Monthly
+        }
 
         OnDateSelected?.Invoke(startDate, endDate);
         calendarPanel.SetActive(false);
+
+        ClearGrid();
     }
 
     private void ClearGrid()
@@ -169,10 +190,8 @@ public class CalendarDropDown : MonoBehaviour
                 grid = dateGrid;
                 break;
             case Filtertype.Weekly:
-                grid = weekGrid;
-                break;
             case Filtertype.Monthly:
-                grid = monthGrid;
+                grid = monthWeekGrid;
                 break;
         }
 
@@ -180,6 +199,8 @@ public class CalendarDropDown : MonoBehaviour
         {
             Destroy(child.gameObject);
         }
+
+        grid.gameObject.SetActive(false);
     }
 
     private DateTime FirstMondayOfYear(int year)

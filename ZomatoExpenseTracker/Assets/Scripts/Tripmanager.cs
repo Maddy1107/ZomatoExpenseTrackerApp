@@ -18,8 +18,8 @@ public class TripManager : MonoBehaviour
 
     private bool tripActive;
     private TripData currentTrip;
-    float mileage;
-    float fuelPrice;
+    private float mileage;
+    private float fuelPrice;
 
     private List<TripData> trips = new List<TripData>();
 
@@ -39,10 +39,10 @@ public class TripManager : MonoBehaviour
         tripFilePath = Path.Combine(Application.persistentDataPath, "trips.json");
         activeTripFilePath = Path.Combine(Application.persistentDataPath, "active_trip.json");
 
-        LoadTrips();
+        trips = JSONHelper.LoadFromJson<List<TripData>>("trips.json") ?? new List<TripData>();
     }
 
-    void Start()
+    private void Start()
     {
         endTripReading.onValueChanged.RemoveAllListeners();
         endTripReading.onValueChanged.AddListener(delegate { UpdateFuelCost(); });
@@ -55,7 +55,7 @@ public class TripManager : MonoBehaviour
             instance = FindObjectOfType<TripManager>(true);
             if (instance == null)
             {
-                Debug.LogError("TripManager is missing in the scene!");
+                Debug.LogError("❌ TripManager is missing in the scene!");
                 return;
             }
         }
@@ -86,7 +86,7 @@ public class TripManager : MonoBehaviour
     {
         if (!float.TryParse(startTripReading.text, out float startOdo))
         {
-            Debug.LogError("Invalid odometer input!");
+            Debug.LogError("❌ Invalid odometer input!");
             return;
         }
 
@@ -106,7 +106,7 @@ public class TripManager : MonoBehaviour
     {
         if (!tripActive || !File.Exists(activeTripFilePath))
         {
-            Debug.LogError("No active trip to end.");
+            Debug.LogError("❌ No active trip to end.");
             return;
         }
 
@@ -115,7 +115,7 @@ public class TripManager : MonoBehaviour
         if (!float.TryParse(endTripReading.text, out float endOdo) ||
             !float.TryParse(earningsInput.text, out float earnings))
         {
-            Debug.LogError("Invalid input in end trip fields.");
+            Debug.LogError("❌ Invalid input in end trip fields.");
             return;
         }
 
@@ -128,7 +128,7 @@ public class TripManager : MonoBehaviour
         currentTrip.profit = currentTrip.earnings - currentTrip.fuelExpense;
 
         trips.Add(currentTrip);
-        SaveTrips();
+        JSONHelper.SaveToJson("trips.json", trips);
 
         if (File.Exists(activeTripFilePath)) File.Delete(activeTripFilePath);
 
@@ -138,79 +138,27 @@ public class TripManager : MonoBehaviour
 
     private void UpdateFuelCost()
     {
-        float startOdo =currentTrip.startOdometer;
         if (!float.TryParse(endTripReading.text, out float endOdo))
         {
             fuelCostText.text = "₹";
             return;
         }
 
-        float distance = endOdo - startOdo;
+        float distance = endOdo - currentTrip.startOdometer;
         float fuelExpense = (distance / mileage) * fuelPrice;
-
         fuelCostText.text = $"Fuel Cost: ₹{fuelExpense:F2}";
-    }
-
-    private void SaveTrips()
-    {
-        try
-        {
-            string json = JsonConvert.SerializeObject(trips, Formatting.Indented);
-            File.WriteAllText(tripFilePath, json);
-            Debug.Log("Trips saved successfully.");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error saving trips: " + ex.Message);
-        }
-    }
-
-    private void LoadTrips()
-    {
-        if (!File.Exists(tripFilePath)) return;
-
-        try
-        {
-            string json = File.ReadAllText(tripFilePath);
-            trips = JsonConvert.DeserializeObject<List<TripData>>(json) ?? new List<TripData>();
-            Debug.Log("Trips loaded successfully.");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error loading trips: " + ex.Message);
-            trips = new List<TripData>();
-        }
     }
 
     private void SaveActiveTrip()
     {
-        try
-        {
-            string json = JsonConvert.SerializeObject(currentTrip, Formatting.Indented);
-            File.WriteAllText(activeTripFilePath, json);
-            Debug.Log("Active trip saved.");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error saving active trip: " + ex.Message);
-        }
+        JSONHelper.SaveToJson("active_trip.json", currentTrip);
+        Debug.Log("✅ Active trip saved.");
     }
 
     private void LoadActiveTrip()
     {
-        if (!File.Exists(activeTripFilePath)) return;
-
-        try
-        {
-            string json = File.ReadAllText(activeTripFilePath);
-            currentTrip = JsonConvert.DeserializeObject<TripData>(json);
-            Debug.Log("Active trip loaded.");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error loading active trip: " + ex.Message);
-            currentTrip = new TripData();
-        }
+        currentTrip = JSONHelper.LoadFromJson<TripData>("active_trip.json") ?? new TripData();
+        Debug.Log("✅ Active trip loaded.");
     }
 
     private void ClosePopup()
@@ -221,13 +169,10 @@ public class TripManager : MonoBehaviour
         fuelCostText.text = "₹";
 
         PlayerPrefs.SetInt("TripActive", tripActive ? 1 : 0);
-
         OnTripStatusChanged?.Invoke();
-
         gameObject.SetActive(false);
     }
 }
-
 
 [System.Serializable]
 public class TripData
@@ -250,3 +195,4 @@ public class TripData
         }
     }
 }
+

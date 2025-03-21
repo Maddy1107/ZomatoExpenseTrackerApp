@@ -34,7 +34,6 @@ public class MainMenu : MonoBehaviour
 
     public void OpenTripLogs()
     {
-        tripLogsButton.interactable = false;
         TripLogsManager.OpenTripLogs();
     }
 
