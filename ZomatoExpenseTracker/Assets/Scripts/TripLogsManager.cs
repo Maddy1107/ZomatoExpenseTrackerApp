@@ -5,18 +5,24 @@ using System.IO;
 using Newtonsoft.Json;
 using UnityEngine.UI;
 using System;
-using Unity.VisualScripting;
+using System.Linq;
 
 public class TripLogsManager : MonoBehaviour
 {
-    private static TripLogsManager instance;
-    public GameObject tripItemPrefab; // Prefab for individual trip entries
-    public GameObject monthHeaderPrefab; // Prefab for expandable month sections
-    public Transform scrollViewContent; // Parent for instantiated objects
+    public static TripLogsManager instance;
+
+    public GameObject tripItemPrefab;       // Prefab for individual trip entries
+    public GameObject tripContainer;        // Parent container for trip logs
+    public GameObject noTripsFoundPanel;    // UI to show when no trips are found
+    public Transform scrollViewContent;     // Parent for instantiated objects
+    public TMP_Text selectedDateText;       // UI element to display the selected date
 
     private string tripFilePath;
-    private Dictionary<string, List<TripData>> tripsByMonth = new Dictionary<string, List<TripData>>();
+    private List<TripData> allTrips = new List<TripData>();
     
+    private DateTime selectedStartDate;
+    private DateTime selectedEndDate;
+
     public static void OpenTripLogs()
     {
         if (instance == null)
@@ -24,20 +30,30 @@ public class TripLogsManager : MonoBehaviour
             instance = FindObjectOfType<TripLogsManager>(true);
             if (instance == null)
             {
-                Debug.LogError("TripManager is missing in the scene!");
+                Debug.LogError("TripLogsManager is missing in the scene!");
                 return;
             }
         }
         instance.gameObject.SetActive(true);
     }
 
+    void OnEnable()
+    {
+        CalendarDropDown.OnDateSelected += LoadTripsForDateRange;
+    }
+
+    void OnDisable()
+    {
+        CalendarDropDown.OnDateSelected -= LoadTripsForDateRange;
+    }
+
     private void Awake()
     {
         tripFilePath = Path.Combine(Application.persistentDataPath, "trips.json");
-        LoadTrips();
+        LoadAllTrips();
     }
 
-    private void LoadTrips()
+    private void LoadAllTrips()
     {
         if (!File.Exists(tripFilePath))
         {
@@ -46,58 +62,46 @@ public class TripLogsManager : MonoBehaviour
         }
 
         string json = File.ReadAllText(tripFilePath);
-        List<TripData> allTrips = JsonConvert.DeserializeObject<List<TripData>>(json) ?? new List<TripData>();
-
-        tripsByMonth.Clear();
-        foreach (TripData trip in allTrips)
-        {
-            string monthKey = trip.date.ToString("MMMM yyyy"); // Example: "March 2025"
-
-            if (!tripsByMonth.ContainsKey(monthKey))
-            {
-                tripsByMonth[monthKey] = new List<TripData>();
-            }
-
-            tripsByMonth[monthKey].Add(trip);
-        }
-
-        PopulateTripLogs();
+        allTrips = JsonConvert.DeserializeObject<List<TripData>>(json) ?? new List<TripData>();
     }
 
-    private void PopulateTripLogs()
+    public void LoadTripsForDateRange(DateTime startDate, DateTime endDate)
     {
+        selectedStartDate = startDate;
+        selectedEndDate = endDate;
+
+        selectedDateText.text = startDate == endDate
+            ? startDate.ToString("dd MMMM yyyy") // Daily
+            : $"{startDate:dd MMM} - {endDate:dd MMM yyyy}"; // Weekly or Monthly
+
         foreach (Transform child in scrollViewContent)
         {
             Destroy(child.gameObject);
         }
 
-        foreach (var monthEntry in tripsByMonth)
+        // Filter trips in selected range
+        List<TripData> filteredTrips = allTrips.Where(trip =>
+            trip.date.Date >= selectedStartDate.Date &&
+            trip.date.Date <= selectedEndDate.Date).ToList();
+
+        if (filteredTrips.Count == 0)
         {
-            string monthName = monthEntry.Key;
-            List<TripData> monthTrips = monthEntry.Value;
+            // No trips found
+            tripContainer.SetActive(false);
+            noTripsFoundPanel.SetActive(true);
+        }
+        else
+        {
+            // Populate trips
+            tripContainer.SetActive(true);
+            noTripsFoundPanel.SetActive(false);
 
-            GameObject monthHeaderObj = Instantiate(monthHeaderPrefab, scrollViewContent);
-            TMP_Text monthHeaderText = monthHeaderObj.GetComponentInChildren<TMP_Text>();
-            monthHeaderText.text = monthName;
-
-            Transform tripListContainer = monthHeaderObj.transform.Find("TripListContainer");
-            Button monthButton = monthHeaderObj.GetComponent<Button>();
-            monthButton.onClick.AddListener(() => ToggleMonthSection(tripListContainer));
-
-            tripListContainer.gameObject.SetActive(false); // Start collapsed
-
-            // Instantiate trip entries under this month
-            foreach (TripData trip in monthTrips)
+            foreach (TripData trip in filteredTrips)
             {
-                GameObject tripItemObj = Instantiate(tripItemPrefab, tripListContainer);
+                GameObject tripItemObj = Instantiate(tripItemPrefab, scrollViewContent);
                 TripItem tripUI = tripItemObj.GetComponent<TripItem>();
                 tripUI.SetTripData(trip);
             }
         }
-    }
-
-    private void ToggleMonthSection(Transform section)
-    {
-        section.gameObject.SetActive(!section.gameObject.activeSelf);
     }
 }

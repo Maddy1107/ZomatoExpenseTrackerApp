@@ -1378,7 +1378,7 @@ MonoBehaviour:
   cityNameText: {fileID: 8591154105761514134}
   startTripButton: {fileID: 671194308510428609}
   startTripButtonText: {fileID: 3877846965241601378}
-  tripActive: 0
+  tripLogsButton: {fileID: 0}
 --- !u!1 &6592661902471811733
 GameObject:
   m_ObjectHideFlags: 0
