@@ -157,6 +157,7 @@ public class TripLogsManager : MonoBehaviour
         }
 
         UpdateButtonUI();
+        CalenderScript.OnDateSelected?.Invoke(selectedDate, selectedDate);
     }
 
     private void UpdateButtonUI()
