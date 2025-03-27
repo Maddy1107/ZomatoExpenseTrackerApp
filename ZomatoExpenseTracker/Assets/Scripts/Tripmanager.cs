@@ -2,21 +2,20 @@ using UnityEngine;
 using TMPro;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using Newtonsoft.Json;
 using UnityEngine.UI;
 
 public class TripManager : MonoBehaviour
 {
-    public static event Action OnTripStatusChanged;
-
     [Header("UI Elements")]
-    [SerializeField] private GameObject startTripPopup, endTripPopup;
-    [SerializeField] private Button startConfirmButton, endConfirmButton;
+    [SerializeField] private Button confirmButton, dateSelectorButton, closeButton;
     [SerializeField] private TMP_InputField startTripReading, endTripReading, earningsInput;
-    [SerializeField] private TMP_Text fuelCostText;
+    [SerializeField] private TMP_Text fuelCostText, dateText, distanceText;
 
-    private bool tripActive;
+    [SerializeField] private TMP_Text profitTitle;
+    [SerializeField] private TMP_Text profitText;
+    [SerializeField] private Image profitBG;
+
     private TripData currentTrip;
     private float mileage;
     private float fuelPrice;
@@ -24,8 +23,24 @@ public class TripManager : MonoBehaviour
     private List<TripData> trips = new List<TripData>();
 
     private static TripManager instance;
-    private string tripFilePath;
-    private string activeTripFilePath;
+
+    void OnEnable()
+    {
+        CalenderScript.OnDateSelected += SetDate;
+    }
+
+    private void SetDate(DateTime time1, DateTime time2)
+    {
+        if (time1 == time2)
+        {
+            dateText.text = time1.ToString("dd MMM yyyy");
+        }
+    }
+
+    void OnDisable()
+    {
+        CalenderScript.OnDateSelected -= SetDate;
+    }
 
     private void Awake()
     {
@@ -36,16 +51,18 @@ public class TripManager : MonoBehaviour
         }
         instance = this;
 
-        tripFilePath = Path.Combine(Application.persistentDataPath, "trips.json");
-        activeTripFilePath = Path.Combine(Application.persistentDataPath, "active_trip.json");
-
         trips = JSONHelper.LoadFromJson<List<TripData>>("trips.json") ?? new List<TripData>();
     }
 
     private void Start()
     {
-        endTripReading.onValueChanged.RemoveAllListeners();
-        endTripReading.onValueChanged.AddListener(delegate { UpdateFuelCost(); });
+        confirmButton.onClick.AddListener(AddTrip);
+        closeButton.onClick.AddListener(ClosePopup);
+        dateSelectorButton.onClick.AddListener(() => CalenderScript.instance.GenerateDailyCalendar(DateTime.Now.Year, DateTime.Now.Month));
+
+        startTripReading.onValueChanged.AddListener(delegate { UpdateDynamicValues(); });
+        endTripReading.onValueChanged.AddListener(delegate { UpdateDynamicValues(); });
+        earningsInput.onValueChanged.AddListener(delegate { UpdateDynamicValues(); });
     }
 
     public static void OpenTripPopup()
@@ -55,7 +72,7 @@ public class TripManager : MonoBehaviour
             instance = FindObjectOfType<TripManager>(true);
             if (instance == null)
             {
-                Debug.LogError("❌ TripManager is missing in the scene!");
+                Debug.LogError("TripManager is missing in the scene!");
                 return;
             }
         }
@@ -64,135 +81,96 @@ public class TripManager : MonoBehaviour
 
     private void ShowPopup()
     {
-        tripActive = PlayerPrefs.GetInt("TripActive", 0) == 1;
-
-        startTripPopup.SetActive(!tripActive);
-        endTripPopup.SetActive(tripActive);
         gameObject.SetActive(true);
 
-        if (tripActive) LoadActiveTrip();
+        currentTrip = new TripData();
+
+        dateText.text = DateTime.Now.ToString("dd MMM yyyy");
 
         mileage = PlayerPrefs.GetFloat("Mileage", 40f);
         fuelPrice = PlayerPrefs.GetFloat("FuelPrice", 103.93f);
-
-        startConfirmButton.onClick.RemoveAllListeners();
-        startConfirmButton.onClick.AddListener(StartTrip);
-
-        endConfirmButton.onClick.RemoveAllListeners();
-        endConfirmButton.onClick.AddListener(EndTrip);
     }
 
-    private void StartTrip()
+    private void AddTrip()
     {
-        if (!float.TryParse(startTripReading.text, out float startOdo))
+        if (!float.TryParse(startTripReading.text, out currentTrip.startOdometer) ||
+            !float.TryParse(endTripReading.text, out currentTrip.endOdometer) ||
+            !float.TryParse(earningsInput.text, out currentTrip.earnings))
         {
-            Debug.LogError("❌ Invalid odometer input!");
+            Debug.LogError("❌ Invalid input in trip fields.");
             return;
         }
 
-        currentTrip = new TripData
-        {
-            date = DateTime.Now,
-            startOdometer = startOdo,
-            startTime = DateTime.Now.TimeOfDay
-        };
-
-        tripActive = true;
-        SaveActiveTrip();
-        ClosePopup();
-    }
-
-    private void EndTrip()
-    {
-        if (!tripActive || !File.Exists(activeTripFilePath))
-        {
-            Debug.LogError("❌ No active trip to end.");
-            return;
-        }
-
-        LoadActiveTrip();
-
-        if (!float.TryParse(endTripReading.text, out float endOdo) ||
-            !float.TryParse(earningsInput.text, out float earnings))
-        {
-            Debug.LogError("❌ Invalid input in end trip fields.");
-            return;
-        }
-
-        currentTrip.endTime = DateTime.Now.TimeOfDay;
-        currentTrip.endOdometer = endOdo;
-        currentTrip.distance = currentTrip.endOdometer - currentTrip.startOdometer;
-        currentTrip.earnings = earnings;
-
+        currentTrip.date = DateTime.Parse(dateText.text);
         currentTrip.fuelExpense = (currentTrip.distance / mileage) * fuelPrice;
         currentTrip.profit = currentTrip.earnings - currentTrip.fuelExpense;
 
         trips.Add(currentTrip);
+
         JSONHelper.SaveToJson("trips.json", trips);
 
-        if (File.Exists(activeTripFilePath)) File.Delete(activeTripFilePath);
-
-        tripActive = false;
         ClosePopup();
     }
 
-    private void UpdateFuelCost()
+    private void UpdateDynamicValues()
     {
-        if (!float.TryParse(endTripReading.text, out float endOdo))
-        {
-            fuelCostText.text = "₹";
-            return;
-        }
+        if (!float.TryParse(startTripReading.text, out float startOdo)) startOdo = 0;
+        if (!float.TryParse(endTripReading.text, out float endOdo)) endOdo = startOdo; // Default to startOdo to avoid negative distance
+        if (!float.TryParse(earningsInput.text, out float earnings)) earnings = 0;
 
-        float distance = endOdo - currentTrip.startOdometer;
+        // // Ensure end odometer is never smaller than start odometer
+        // if (endOdo < startOdo)
+        // {
+        //     endOdo = startOdo;
+        //     endTripReading.text = startOdo.ToString();
+        //     Debug.LogError("End reading cannot be smaller than start reading");
+        // }
+
+        currentTrip.startOdometer = startOdo;
+        currentTrip.endOdometer = endOdo;
+        currentTrip.earnings = earnings;
+
+        float distance = endOdo - startOdo;
         float fuelExpense = (distance / mileage) * fuelPrice;
-        fuelCostText.text = $"Fuel Cost: ₹{fuelExpense:F2}";
+        float profit = earnings - fuelExpense;
+
+        distanceText.text = $"{distance:F2} km";
+        fuelCostText.text = $"Rs. {fuelExpense:F2}";
+        profitText.text = $"Rs. {profit:F2}";
+
+        if (profit >= 0)
+        {
+            profitText.color = Color.green;
+            profitBG.color = new Color(0.5f, 1f, 0.5f, 0.5f);
+            profitTitle.text = "Profit";
+        }
+        else
+        {
+            profitText.color = Color.red;
+            profitBG.color = new Color(1f, 0.5f, 0.5f, 0.5f);
+            profitTitle.text = "Loss";
+        }
     }
 
-    private void SaveActiveTrip()
-    {
-        JSONHelper.SaveToJson("active_trip.json", currentTrip);
-        Debug.Log("✅ Active trip saved.");
+        private void ClosePopup()
+        {
+            startTripReading.text = string.Empty;
+            endTripReading.text = string.Empty;
+            earningsInput.text = string.Empty;
+            fuelCostText.text = "Rs. 0.00";
+            distanceText.text = "0 km";
+            gameObject.SetActive(false);
+        }
     }
-
-    private void LoadActiveTrip()
-    {
-        currentTrip = JSONHelper.LoadFromJson<TripData>("active_trip.json") ?? new TripData();
-        Debug.Log("✅ Active trip loaded.");
-    }
-
-    private void ClosePopup()
-    {
-        startTripReading.text = "";
-        endTripReading.text = "";
-        earningsInput.text = "";
-        fuelCostText.text = "₹";
-
-        PlayerPrefs.SetInt("TripActive", tripActive ? 1 : 0);
-        OnTripStatusChanged?.Invoke();
-        gameObject.SetActive(false);
-    }
-}
 
 [System.Serializable]
 public class TripData
 {
     public DateTime date;
-    public TimeSpan startTime;
-    public TimeSpan endTime;
     public float startOdometer;
     public float endOdometer;
-    public float distance;
+    public float distance => Mathf.Max(endOdometer - startOdometer, 0);
     public float fuelExpense;
     public float earnings;
     public float profit;
-    public string Duration
-    {
-        get
-        {
-            TimeSpan duration = endTime - startTime;
-            return $"{(int)duration.TotalHours:D2}h:{duration.Minutes:D2}m";
-        }
-    }
 }
-

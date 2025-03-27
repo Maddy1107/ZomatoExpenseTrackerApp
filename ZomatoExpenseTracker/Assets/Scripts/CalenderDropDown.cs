@@ -21,6 +21,7 @@ public class CalendarDropDown : MonoBehaviour
     public Button dailyButton, weeklyButton, monthlyButton, selectDateButton; // UI buttons
     public Color selectedColor, defaultColor;
     public static Action<DateTime, DateTime> OnDateSelected;
+    public static Action<DateTime> OnDateSelectedSingle;
 
     private DateTime selectedDate = DateTime.Now;
     private Filtertype filterType = Filtertype.Daily;

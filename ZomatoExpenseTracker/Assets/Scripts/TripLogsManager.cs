@@ -10,14 +10,11 @@ public class TripLogsManager : MonoBehaviour
     public static TripLogsManager instance;
 
     [Header("UI Elements")]
-    public GameObject tripItemPrefab;       // Prefab for individual trip entries
-    public GameObject tripContainer;        // Parent container for trip logs
-    public GameObject noTripsFoundPanel;    // UI to show when no trips are found
-    public Transform scrollViewContent;     // Parent for instantiated objects
+    public GameObject dailytripItemPrefab, monthWeekItemPrefab;
+    public GameObject dailytripContainer, monthWeekContainer;
+    public GameObject noTripsFoundPanel; 
 
     private List<TripData> allTrips = new List<TripData>();
-    private DateTime selectedStartDate;
-    private DateTime selectedEndDate;
     
     public TMP_Text selectedDateText, headerText;
     public Button dailyButton, weeklyButton, monthlyButton, selectDateButton;
@@ -30,26 +27,13 @@ public class TripLogsManager : MonoBehaviour
     void OnEnable()
     {
         CalenderScript.OnDateSelected += LoadTripsForDateRange;
+        Show();
     }
 
     void OnDisable()
     {
         CalenderScript.OnDateSelected -= LoadTripsForDateRange;
     }   
-    
-    public static void OpenTripLogs()
-    {
-        if (instance == null)
-        {
-            instance = FindObjectOfType<TripLogsManager>(true);
-            if (instance == null)
-            {
-                Debug.LogError("❌ TripLogsManager is missing in the scene!");
-                return;
-            }
-        }
-        instance.gameObject.SetActive(true);
-    }
 
     private void Start()
     {
@@ -68,7 +52,6 @@ public class TripLogsManager : MonoBehaviour
 
     public void Show()
     {
-        gameObject.SetActive(true);
         LoadAllTrips();
     }
 
@@ -102,15 +85,32 @@ public class TripLogsManager : MonoBehaviour
         {
             selectedDateText.text = startDate.ToString("dd MMMM yyyy");
         }
+        else if (startDate.Day == 1 && endDate == new DateTime(startDate.Year, startDate.Month, DateTime.DaysInMonth(startDate.Year, startDate.Month)))
+        {
+            selectedDateText.text = startDate.ToString("MMMM yyyy"); 
+        }
         else
         {
-            selectedDateText.text = $"{startDate:dd MMM} - {endDate:dd MMM yyyy}"; 
+            selectedDateText.text = $"{startDate:dd MMM} - {endDate:dd MMM yyyy}";
         }
 
-        foreach (Transform child in scrollViewContent)
+        GameObject scrollViewContent = (filterType == Filtertype.Daily) ? dailytripContainer : monthWeekContainer;
+        GameObject itemPrefab = (filterType == Filtertype.Daily) ? dailytripItemPrefab : monthWeekItemPrefab;
+        if (filterType == Filtertype.Daily)
         {
-            Destroy(child.gameObject);
+            foreach (Transform child in dailytripContainer.transform)
+            {
+                Destroy(child.gameObject);
+            }
         }
+        else
+        {
+            foreach (Transform child in monthWeekContainer.transform)
+            {
+                Destroy(child.gameObject);
+            }
+        }
+    
 
         List<TripData> filteredTrips = allTrips.Where(trip =>
             trip.date.Date >= startDate.Date &&
@@ -118,20 +118,17 @@ public class TripLogsManager : MonoBehaviour
 
         if (filteredTrips.Count == 0)
         {
-            tripContainer.SetActive(false);
+            scrollViewContent.SetActive(false);
             noTripsFoundPanel.SetActive(true);
         }
         else
         {
-            tripContainer.SetActive(true);
+            scrollViewContent.SetActive(true);
             noTripsFoundPanel.SetActive(false);
 
-            foreach (TripData trip in filteredTrips)
-            {
-                GameObject tripItemObj = Instantiate(tripItemPrefab, scrollViewContent);
-                TripItem tripUI = tripItemObj.GetComponent<TripItem>();
-                tripUI.SetTripData(trip);
-            }
+            GameObject tripItemObj = Instantiate(dailytripItemPrefab, scrollViewContent.transform);
+            TripItem tripUI = tripItemObj.GetComponent<TripItem>();
+            tripUI.SetTripData(filteredTrips, filterType);
         }
     }
 

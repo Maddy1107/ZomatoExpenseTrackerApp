@@ -15,6 +15,10 @@ public class CalenderScript : MonoBehaviour
     public static Action<DateTime, DateTime> OnDateSelected;
     public static Action<DateTime> OnDateSelectedSingle;
 
+    void Awake()
+    {
+        instance = this;
+    }
 
     void Start()
     {
@@ -49,12 +53,16 @@ public class CalenderScript : MonoBehaviour
         calendarPanel.SetActive(true);
         monthWeekGrid.gameObject.SetActive(true);
 
-        DateTime firstMonday = FirstMondayOfYear(year);
+        DateTime today = DateTime.Today;
+        DateTime lastMonday = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday); // Last Monday before today
 
-        for (int i = 0; i < 52; i++) // Generate 52 weeks
+        int weekCount = 0;
+        while (lastMonday.Year == year && weekCount < 52) // Limit to past weeks only
         {
-            DateTime weekStart = firstMonday.AddDays(i * 7);
+            DateTime weekStart = lastMonday.AddDays(-weekCount * 7);
             DateTime weekEnd = weekStart.AddDays(6);
+
+            if (weekStart > today) break; // Stop if the week hasn't started yet
 
             Button weekButton = Instantiate(monthweekPrefab, monthWeekGrid);
             weekButton.GetComponentInChildren<TMP_Text>().text = $"{weekStart:dd MMM} - {weekEnd:dd MMM}";
@@ -66,6 +74,8 @@ public class CalenderScript : MonoBehaviour
             {
                 SelectDateRange(selectedStart, selectedEnd);
             });
+
+            weekCount++;
         }
     }
 
@@ -73,22 +83,27 @@ public class CalenderScript : MonoBehaviour
     {
         calendarPanel.SetActive(true);
         monthWeekGrid.gameObject.SetActive(true);
-        
-        for (int month = 1; month <= 12; month++)
+
+        DateTime today = DateTime.Today;
+        int currentMonth = today.Month;
+        int currentYear = today.Year;
+
+        for (int month = currentMonth; month >= 1; month--) // Only past months
         {
             Button monthButton = Instantiate(monthweekPrefab, monthWeekGrid);
-            monthButton.GetComponentInChildren<TMP_Text>().text = new DateTime(2025, month, 1).ToString("MMMM");
+            monthButton.GetComponentInChildren<TMP_Text>().text = new DateTime(currentYear, month, 1).ToString("MMMM");
 
             int selectedMonth = month;
 
             monthButton.onClick.AddListener(() =>
             {
-                DateTime start = new DateTime(DateTime.Now.Year, selectedMonth, 1);
-                DateTime end = start.AddMonths(1).AddDays(-1); // Last day of the month
+                DateTime start = new DateTime(currentYear, selectedMonth, 1);
+                DateTime end = start.AddMonths(1).AddDays(-1);
                 SelectDateRange(start, end);
             });
         }
     }
+
 
     private void SelectDateRange(DateTime startDate, DateTime endDate)
     {
