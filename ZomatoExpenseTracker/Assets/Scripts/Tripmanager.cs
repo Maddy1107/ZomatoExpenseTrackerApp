@@ -7,130 +7,104 @@ using UnityEngine.UI;
 
 public class TripManager : MonoBehaviour
 {
+    public static TripManager Instance { get; private set; }
+
     [Header("UI Elements")]
     [SerializeField] private Button confirmButton, dateSelectorButton, closeButton;
     [SerializeField] private TMP_InputField startTripReading, endTripReading, earningsInput;
     [SerializeField] private TMP_Text fuelCostText, dateText, distanceText;
-
-    [SerializeField] private TMP_Text profitTitle;
-    [SerializeField] private TMP_Text profitText;
+    [SerializeField] private TMP_Text profitTitle, profitText;
     [SerializeField] private Image profitBG;
 
-    private TripData currentTrip;
-    private float mileage;
-    private float fuelPrice;
-
-    private List<TripData> trips = new List<TripData>();
-
-    private static TripManager instance;
-
-    void OnEnable()
-    {
-        CalenderScript.OnDateSelected += SetDate;
-    }
-
-    private void SetDate(DateTime time1, DateTime time2)
-    {
-        if (time1 == time2)
-        {
-            dateText.text = time1.ToString("dd MMM yyyy");
-        }
-    }
-
-    void OnDisable()
-    {
-        CalenderScript.OnDateSelected -= SetDate;
-    }
+    private float mileage, fuelPrice;
+    private UserData userData;
 
     private void Awake()
     {
-        if (instance != null && instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
-        instance = this;
+        if (Instance == null) Instance = this;
+        else { Destroy(gameObject); return; }
 
-        trips = JSONHelper.LoadFromJson<List<TripData>>("trips.json") ?? new List<TripData>();
+        // Load UserData from JSON
+        userData = JSONHelper.LoadFromJson<UserData>("userdata.json") ?? new UserData();
     }
+
+    private void OnEnable()
+    {
+        CalenderScript.OnDateSelected += SetDate;
+        ShowPopup();
+    }
+
+    private void OnDisable() => CalenderScript.OnDateSelected -= SetDate;
 
     private void Start()
     {
         confirmButton.onClick.AddListener(AddTrip);
         closeButton.onClick.AddListener(ClosePopup);
-        dateSelectorButton.onClick.AddListener(() => CalenderScript.instance.GenerateDailyCalendar(DateTime.Now.Year, DateTime.Now.Month));
+        dateSelectorButton.onClick.AddListener(() => CalenderScript.Instance.GenerateDailyCalendar(DateTime.Now.Year, DateTime.Now.Month));
 
-        startTripReading.onValueChanged.AddListener(delegate { UpdateDynamicValues(); });
-        endTripReading.onValueChanged.AddListener(delegate { UpdateDynamicValues(); });
-        earningsInput.onValueChanged.AddListener(delegate { UpdateDynamicValues(); });
+        startTripReading.onValueChanged.AddListener(_ => UpdateDynamicValues());
+        endTripReading.onValueChanged.AddListener(_ => UpdateDynamicValues());
+        earningsInput.onValueChanged.AddListener(_ => UpdateDynamicValues());
     }
 
     public static void OpenTripPopup()
     {
-        if (instance == null)
+        if (Instance == null)
         {
-            instance = FindObjectOfType<TripManager>(true);
-            if (instance == null)
-            {
-                Debug.LogError("TripManager is missing in the scene!");
-                return;
-            }
+            Instance = FindObjectOfType<TripManager>(true);
+            if (Instance == null) { Debug.LogError("TripManager is missing in the scene!"); return; }
         }
-        instance.ShowPopup();
+        Instance.ShowPopup();
     }
 
     private void ShowPopup()
     {
         gameObject.SetActive(true);
-
-        currentTrip = new TripData();
-
         dateText.text = DateTime.Now.ToString("dd MMM yyyy");
-
         mileage = PlayerPrefs.GetFloat("Mileage", 40f);
         fuelPrice = PlayerPrefs.GetFloat("FuelPrice", 103.93f);
+        ResetInputs();
+    }
+
+    private void SetDate(DateTime selectedDate, DateTime _)
+    {
+        dateText.text = selectedDate.ToString("dd MMM yyyy");
     }
 
     private void AddTrip()
     {
-        if (!float.TryParse(startTripReading.text, out currentTrip.startOdometer) ||
-            !float.TryParse(endTripReading.text, out currentTrip.endOdometer) ||
-            !float.TryParse(earningsInput.text, out currentTrip.earnings))
+        if (!TryParseInputs(out float startOdo, out float endOdo, out float earnings)) return;
+
+        DateTime tripDate;
+        if (!DateTime.TryParse(dateText.text, out tripDate))
         {
-            Debug.LogError("❌ Invalid input in trip fields.");
+            Debug.LogError("❌ Invalid date format.");
             return;
         }
 
-        currentTrip.date = DateTime.Parse(dateText.text);
-        currentTrip.fuelExpense = (currentTrip.distance / mileage) * fuelPrice;
-        currentTrip.profit = currentTrip.earnings - currentTrip.fuelExpense;
+        TripData newTrip = new TripData
+        {
+            date = tripDate,
+            startOdometer = startOdo,
+            endOdometer = endOdo,
+            earnings = earnings
+        };
 
-        trips.Add(currentTrip);
+        newTrip.fuelExpense = (newTrip.distance / mileage) * fuelPrice;
+        newTrip.profit = newTrip.earnings - newTrip.fuelExpense;
 
-        JSONHelper.SaveToJson("trips.json", trips);
+        // Add trip to UserData
+        userData.trips.Add(newTrip);
+        SaveUserData();
 
         ClosePopup();
     }
 
     private void UpdateDynamicValues()
     {
-        if (!float.TryParse(startTripReading.text, out float startOdo)) startOdo = 0;
-        if (!float.TryParse(endTripReading.text, out float endOdo)) endOdo = startOdo; // Default to startOdo to avoid negative distance
-        if (!float.TryParse(earningsInput.text, out float earnings)) earnings = 0;
+        if (!TryParseInputs(out float startOdo, out float endOdo, out float earnings)) return;
 
-        // // Ensure end odometer is never smaller than start odometer
-        // if (endOdo < startOdo)
-        // {
-        //     endOdo = startOdo;
-        //     endTripReading.text = startOdo.ToString();
-        //     Debug.LogError("End reading cannot be smaller than start reading");
-        // }
-
-        currentTrip.startOdometer = startOdo;
-        currentTrip.endOdometer = endOdo;
-        currentTrip.earnings = earnings;
-
-        float distance = endOdo - startOdo;
+        float distance = Mathf.Max(endOdo - startOdo, 0);
         float fuelExpense = (distance / mileage) * fuelPrice;
         float profit = earnings - fuelExpense;
 
@@ -138,30 +112,47 @@ public class TripManager : MonoBehaviour
         fuelCostText.text = $"Rs. {fuelExpense:F2}";
         profitText.text = $"Rs. {profit:F2}";
 
-        if (profit >= 0)
-        {
-            profitText.color = Color.green;
-            profitBG.color = new Color(0.5f, 1f, 0.5f, 0.5f);
-            profitTitle.text = "Profit";
-        }
-        else
-        {
-            profitText.color = Color.red;
-            profitBG.color = new Color(1f, 0.5f, 0.5f, 0.5f);
-            profitTitle.text = "Loss";
-        }
+        profitText.color = profit >= 0 ? Color.green : Color.red;
+        profitBG.color = profit >= 0 ? new Color(0.5f, 1f, 0.5f, 0.5f) : new Color(1f, 0.5f, 0.5f, 0.5f);
+        profitTitle.text = profit >= 0 ? "Profit" : "Loss";
     }
 
-        private void ClosePopup()
+    private bool TryParseInputs(out float startOdo, out float endOdo, out float earnings)
+    {
+        startOdo = endOdo = earnings = 0f;
+
+        bool valid = float.TryParse(startTripReading.text, out startOdo)
+                && float.TryParse(endTripReading.text, out endOdo)
+                && float.TryParse(earningsInput.text, out earnings);
+
+        if (!valid)
         {
-            startTripReading.text = string.Empty;
-            endTripReading.text = string.Empty;
-            earningsInput.text = string.Empty;
-            fuelCostText.text = "Rs. 0.00";
-            distanceText.text = "0 km";
-            gameObject.SetActive(false);
+            Debug.LogError("❌ Invalid input in trip fields.");
+            return false;
         }
+
+        return true;
     }
+
+    private void ClosePopup()
+    {
+        ResetInputs();
+        gameObject.SetActive(false);
+    }
+
+    private void ResetInputs()
+    {
+        startTripReading.text = endTripReading.text = earningsInput.text = string.Empty;
+        fuelCostText.text = "Rs. 0.00";
+        distanceText.text = "0 km";
+    }
+
+    private void SaveUserData()
+    {
+        JSONHelper.SaveToJson("userdata.json", userData);
+    }
+}
+
 
 [System.Serializable]
 public class TripData
@@ -173,4 +164,27 @@ public class TripData
     public float fuelExpense;
     public float earnings;
     public float profit;
+}
+
+[System.Serializable]
+public class DeductionData
+{
+    public DateTime date;
+    public string reason;
+    public float amount;
+}
+
+[System.Serializable]
+public class ExpensesData
+{
+    public string reason;
+    public float amount;
+}
+
+[System.Serializable]
+public class UserData
+{
+    public List<TripData> trips = new List<TripData>();
+    public List<DeductionData> deductions = new List<DeductionData>();
+    public List<ExpensesData> expenses = new List<ExpensesData>();
 }

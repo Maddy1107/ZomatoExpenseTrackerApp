@@ -1,19 +1,19 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using UnityEngine;
 
 public static class JSONHelper
 {
+    private static string GetFilePath(string fileName) => Path.Combine(Application.persistentDataPath, fileName);
+
     public static void SaveToJson<T>(string fileName, T data)
     {
         try
         {
-            string filePath = Path.Combine(Application.persistentDataPath, fileName);
             string json = JsonConvert.SerializeObject(data, Formatting.Indented);
-            File.WriteAllText(filePath, json);
-            Debug.Log($"✅ Data saved to {filePath}");
+            File.WriteAllText(GetFilePath(fileName), json);
+            Debug.Log($"✅ Data saved to {fileName}");
         }
         catch (Exception ex)
         {
@@ -23,43 +23,37 @@ public static class JSONHelper
 
     public static T LoadFromJson<T>(string fileName)
     {
+        string filePath = GetFilePath(fileName);
+        if (!File.Exists(filePath))
+        {
+            Debug.LogWarning($"⚠️ File not found: {fileName}");
+            return default;
+        }
+
         try
         {
-            string filePath = Path.Combine(Application.persistentDataPath, fileName);
-            if (File.Exists(filePath))
-            {
-                string json = File.ReadAllText(filePath);
-                return JsonConvert.DeserializeObject<T>(json);
-            }
-            else
-            {
-                Debug.LogWarning($"⚠️ File not found: {filePath}");
-            }
+            return JsonConvert.DeserializeObject<T>(File.ReadAllText(filePath));
         }
         catch (Exception ex)
         {
             Debug.LogError($"❌ Error loading JSON: {ex.Message}");
+            return default;
         }
-
-        return default;
     }
 
-    public static bool FileExists(string fileName)
-    {
-        return File.Exists(Path.Combine(Application.persistentDataPath, fileName));
-    }
+    public static bool FileExists(string fileName) => File.Exists(GetFilePath(fileName));
 
     public static void DeleteFile(string fileName)
     {
-        string filePath = Path.Combine(Application.persistentDataPath, fileName);
+        string filePath = GetFilePath(fileName);
         if (File.Exists(filePath))
         {
             File.Delete(filePath);
-            Debug.Log($"🗑️ Deleted file: {filePath}");
+            Debug.Log($"🗑️ Deleted file: {fileName}");
         }
         else
         {
-            Debug.LogWarning($"⚠️ Cannot delete, file not found: {filePath}");
+            Debug.LogWarning($"⚠️ Cannot delete, file not found: {fileName}");
         }
     }
 }

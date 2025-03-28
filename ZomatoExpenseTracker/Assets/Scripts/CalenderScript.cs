@@ -5,22 +5,22 @@ using UnityEngine.UI;
 
 public class CalenderScript : MonoBehaviour
 {
-    public static CalenderScript instance;
+    public static CalenderScript Instance { get; private set; }
 
-    public GameObject calendarPanel;
-    public Transform dateGrid, monthWeekGrid; 
-    public Button dateButtonPrefab;    // Prefab for calendar date buttons
-    public Button monthweekPrefab;
+    [Header("UI Elements")]
+    [SerializeField] private GameObject calendarPanel;
+    [SerializeField] private Transform dateGrid, monthWeekGrid;
+    [SerializeField] private Button dateButtonPrefab, monthWeekButtonPrefab;
 
-    public static Action<DateTime, DateTime> OnDateSelected;
-    public static Action<DateTime> OnDateSelectedSingle;
+    public static event Action<DateTime, DateTime> OnDateSelected;
 
-    void Awake()
+    private void Awake()
     {
-        instance = this;
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
     }
 
-    void Start()
+    private void Start()
     {
         calendarPanel.SetActive(false);
         dateGrid.gameObject.SetActive(false);
@@ -29,112 +29,98 @@ public class CalenderScript : MonoBehaviour
 
     public void GenerateDailyCalendar(int year, int month)
     {
-        calendarPanel.SetActive(true);
-        dateGrid.gameObject.SetActive(true);
+        OpenCalendar(dateGrid);
 
         int daysInMonth = DateTime.DaysInMonth(year, month);
-
-        for (int day = 1; day <= daysInMonth; day++)
+        
+        for (int day = 1; day <= daysInMonth; day++) // ✅ Fix: Include the last day
         {
-            Button dateButton = Instantiate(dateButtonPrefab, dateGrid);
-            dateButton.GetComponentInChildren<TMP_Text>().text = day.ToString();
-            int selectedDay = day;
+            int selectedDay = day; // ✅ Capture correct value for each button
 
-            dateButton.onClick.AddListener(() =>
+            CreateButton(dateButtonPrefab, dateGrid, selectedDay.ToString(), () =>
             {
-                DateTime selected = new DateTime(year, month, selectedDay);
-                SelectDateRange(selected, selected); // Single day selection
+                DateTime selectedDate = new DateTime(year, month, selectedDay);
+                SelectDateRange(selectedDate, selectedDate);
             });
         }
     }
 
     public void GenerateWeeklyRanges(int year)
     {
-        calendarPanel.SetActive(true);
-        monthWeekGrid.gameObject.SetActive(true);
+        OpenCalendar(monthWeekGrid);
 
         DateTime today = DateTime.Today;
-        DateTime lastMonday = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday); // Last Monday before today
+        DateTime lastMonday = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday);
 
-        int weekCount = 0;
-        while (lastMonday.Year == year && weekCount < 52) // Limit to past weeks only
+        for (int weekOffset = 0; weekOffset < 52; weekOffset++)
         {
-            DateTime weekStart = lastMonday.AddDays(-weekCount * 7);
+            DateTime weekStart = lastMonday.AddDays(-weekOffset * 7);
             DateTime weekEnd = weekStart.AddDays(6);
 
-            if (weekStart > today) break; // Stop if the week hasn't started yet
+            if (weekStart.Year != year || weekStart > today) break;
 
-            Button weekButton = Instantiate(monthweekPrefab, monthWeekGrid);
-            weekButton.GetComponentInChildren<TMP_Text>().text = $"{weekStart:dd MMM} - {weekEnd:dd MMM}";
-
-            DateTime selectedStart = weekStart;
-            DateTime selectedEnd = weekEnd;
-
-            weekButton.onClick.AddListener(() =>
+            CreateButton(monthWeekButtonPrefab, monthWeekGrid, $"{weekStart:dd MMM} - {weekEnd:dd MMM}", () =>
             {
-                SelectDateRange(selectedStart, selectedEnd);
+                SelectDateRange(weekStart, weekEnd);
             });
-
-            weekCount++;
         }
     }
 
     public void GenerateMonthlySelection()
     {
-        calendarPanel.SetActive(true);
-        monthWeekGrid.gameObject.SetActive(true);
+        OpenCalendar(monthWeekGrid);
 
         DateTime today = DateTime.Today;
-        int currentMonth = today.Month;
         int currentYear = today.Year;
 
-        for (int month = currentMonth; month >= 1; month--) // Only past months
+        for (int month = today.Month; month >= 1; month--)
         {
-            Button monthButton = Instantiate(monthweekPrefab, monthWeekGrid);
-            monthButton.GetComponentInChildren<TMP_Text>().text = new DateTime(currentYear, month, 1).ToString("MMMM");
+            DateTime startOfMonth = new DateTime(currentYear, month, 1);
+            DateTime endOfMonth = startOfMonth.AddMonths(1).AddDays(-1);
 
-            int selectedMonth = month;
-
-            monthButton.onClick.AddListener(() =>
+            CreateButton(monthWeekButtonPrefab, monthWeekGrid, startOfMonth.ToString("MMMM"), () =>
             {
-                DateTime start = new DateTime(currentYear, selectedMonth, 1);
-                DateTime end = start.AddMonths(1).AddDays(-1);
-                SelectDateRange(start, end);
+                SelectDateRange(startOfMonth, endOfMonth);
             });
         }
     }
 
-
     private void SelectDateRange(DateTime startDate, DateTime endDate)
     {
         OnDateSelected?.Invoke(startDate, endDate);
+        CloseCalendar();
+    }
+
+    private void OpenCalendar(Transform grid)
+    {
+        calendarPanel.SetActive(true);
+        grid.gameObject.SetActive(true);
+    }
+
+    private void CloseCalendar()
+    {
         calendarPanel.SetActive(false);
-
-        ClearGrid();
+        ClearGrid(dateGrid);
+        ClearGrid(monthWeekGrid);
     }
 
-    private void ClearGrid()
+    private void CreateButton(Button prefab, Transform parent, string text, Action onClickAction)
     {
-        foreach (Transform child in dateGrid)
+        Button button = Instantiate(prefab, parent);
+        button.GetComponentInChildren<TMP_Text>().text = text;
+        button.onClick.AddListener(() =>
+        {
+            onClickAction.Invoke();
+            button.onClick.RemoveAllListeners();
+        });
+    }
+
+    private void ClearGrid(Transform grid)
+    {
+        foreach (Transform child in grid)
         {
             Destroy(child.gameObject);
         }
-        foreach (Transform child in monthWeekGrid)
-        {
-            Destroy(child.gameObject);
-        }
-
-        dateGrid.gameObject.SetActive(false);
-        monthWeekGrid.gameObject.SetActive(false);
-    }
-
-    private DateTime FirstMondayOfYear(int year)
-    {
-        DateTime firstDay = new DateTime(year, 1, 1);
-        while (firstDay.DayOfWeek != DayOfWeek.Monday)
-        {
-            firstDay = firstDay.AddDays(1);
-        }
-        return firstDay;
+        grid.gameObject.SetActive(false);
     }
 }

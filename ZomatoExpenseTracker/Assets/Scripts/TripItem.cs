@@ -1,18 +1,17 @@
 using UnityEngine;
 using TMPro;
-using System.Collections.Generic;
 using UnityEngine.UI;
+using System.Collections.Generic;
 
 public class TripItem : MonoBehaviour
 {
-    public TMP_Text earnedText,distanceText,fuelCostText,profitText;
+    [Header("UI Elements")]
+    [SerializeField] private TMP_Text earnedText, distanceText, fuelCostText, profitText;
+    [SerializeField] private GameObject distanceContainer, fuelCostContainer;
 
-    public void SetTripData(List<TripData> trips, Filtertype filterType)
+    public void SetTripData(List<TripData> trips, FilterType filterType)
     {
-        float totalEarnings = 0f;
-        float totalProfit = 0f;
-        float totalFuelExpense = 0f;
-        float totalDistance = 0f;
+        float totalEarnings = 0f, totalProfit = 0f, totalFuelExpense = 0f, totalDistance = 0f;
 
         foreach (var trip in trips)
         {
@@ -22,21 +21,27 @@ public class TripItem : MonoBehaviour
             totalDistance += trip.distance;
         }
 
-        if (filterType == Filtertype.Daily && trips.Count == 1)
+        earnedText.text = $"Rs. {totalEarnings:F2}" + (filterType == FilterType.Daily ? "" : " (Total)");
+        profitText.text = $"Rs. {totalProfit:F2}" + (filterType == FilterType.Daily ? "" : " (Total)");
+
+        if (filterType == FilterType.Daily && trips.Count == 1)
         {
-            earnedText.text = $"Rs.{totalEarnings:F2}";
-            profitText.text = $"Rs.{totalProfit:F2}";
             distanceText.text = $"{totalDistance:F2} km";
-            fuelCostText.text = $"Rs.{totalFuelExpense:F2}";
+            fuelCostText.text = $"Rs. {totalFuelExpense:F2}";
+            SetVisibility(distanceContainer, true);
+            SetVisibility(fuelCostContainer, true);
         }
-        else if (filterType == Filtertype.Weekly || filterType == Filtertype.Monthly)
+        else
         {
-            earnedText.text = $"Rs.{totalEarnings:F2} (Total)";
-            profitText.text = $"Rs.{totalProfit:F2} (Total)";
-            distanceText.GetComponentInParent<Image>().gameObject.SetActive(false);
-            fuelCostText.GetComponentInParent<Image>().gameObject.SetActive(false);}
+            SetVisibility(distanceContainer, false);
+            SetVisibility(fuelCostContainer, false);
+        }
     }
 
+    private void SetVisibility(GameObject container, bool isVisible)
+    {
+        if (container != null) container.SetActive(isVisible);
+    }
 
     public void Print()
     {
