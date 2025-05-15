@@ -6,12 +6,13 @@ using System.Linq;
 public class MainMenu : MonoBehaviour
 {
     [SerializeField] private TMP_Text earningsText, deductionsText, expensesText, profitText;
-    [SerializeField] private Button addTripButton;
-    public GameObject tripPopup;
+    [SerializeField] private Button addTripButton, addDeductionButton;
+    public GameObject tripPopup, deductionPopup;
 
     private void OnEnable()
     {
         addTripButton.onClick.AddListener(OpenTripPopup);
+        addDeductionButton.onClick.AddListener(OpenDeductionPopup);
         LoadLifetimeStats();
     }
 
@@ -19,6 +20,11 @@ public class MainMenu : MonoBehaviour
     {
         tripPopup.SetActive(true);
     }   
+    public void OpenDeductionPopup()
+    {
+        deductionPopup.SetActive(true);
+    }   
+
     private void LoadLifetimeStats()
     {
         UserData userData = JSONHelper.LoadFromJson<UserData>("userdata.json") ?? new UserData();
@@ -27,8 +33,7 @@ public class MainMenu : MonoBehaviour
 
         float lifetimeDeductions = userData.deductions.Sum(d => d.amount);
 
-        float lifetimeExpenses = userData.trips.Sum(trip => trip.fuelExpense) 
-                               + userData.expenses.Sum(exp => exp.amount);
+        float lifetimeExpenses = userData.trips.Sum(trip => trip.fuelExpense);
         
         float lifetimeProfit = lifetimeEarnings - lifetimeDeductions - lifetimeExpenses;
 
@@ -41,6 +46,6 @@ public class MainMenu : MonoBehaviour
 
     private void OnDisable()
     {
-        addTripButton.onClick.RemoveListener(TripManager.OpenTripPopup);
+        addTripButton.onClick.RemoveListener(TripPopup.OpenTripPopup);
     }
 }

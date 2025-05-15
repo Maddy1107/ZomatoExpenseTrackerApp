@@ -5,8 +5,6 @@ using System.Linq;
 using System;
 using UnityEngine.UI;
 
-public enum FilterType { Daily, Weekly, Monthly }
-
 public class TripLogsManager : MonoBehaviour
 {
     public static TripLogsManager Instance { get; private set; }
@@ -17,15 +15,11 @@ public class TripLogsManager : MonoBehaviour
     [SerializeField] private GameObject noTripsPanel;
 
     [Header("Filter UI")]
-    [SerializeField] private TMP_Text selectedDateText, headerText;
-    [SerializeField] private Button dailyButton, weeklyButton, monthlyButton, selectDateButton;
-
-    [Header("UI Colors")]
-    [SerializeField] private Color selectedColor, defaultColor;
-
+    [SerializeField] private TMP_Text selectedDateText;
+    [SerializeField] private Button selectDateButton;
+    [SerializeField] private TMP_Dropdown monthDropdown;
     private List<TripData> allTrips = new List<TripData>();
-    private DateTime selectedDate = DateTime.Now;
-    private FilterType filterType = FilterType.Daily;
+    private DateTime selectedMonth = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
 
     private void Awake()
     {
@@ -37,103 +31,77 @@ public class TripLogsManager : MonoBehaviour
 
     private void OnEnable()
     {
-        CalenderScript.OnDateSelected += LoadTripsForDateRange;
+        PopulateDropDown();
         LoadAllTrips();
     }
 
-    private void OnDisable()
+    private void PopulateDropDown()
     {
-        CalenderScript.OnDateSelected -= LoadTripsForDateRange;
+        monthDropdown.ClearOptions();
+        var months = System.Globalization.DateTimeFormatInfo.InvariantInfo.MonthNames
+            .Where(m => !string.IsNullOrEmpty(m))
+            .ToList();
+        months.Insert(0, "Show All");
+        monthDropdown.AddOptions(months);
+        int currentMonthIndex = DateTime.Now.Month;
+        monthDropdown.value = currentMonthIndex;
+        monthDropdown.RefreshShownValue();
     }
 
     private void Start()
     {
-        dailyButton.onClick.AddListener(() => SetFilter(FilterType.Daily));
-        weeklyButton.onClick.AddListener(() => SetFilter(FilterType.Weekly));
-        monthlyButton.onClick.AddListener(() => SetFilter(FilterType.Monthly));
-        selectDateButton.onClick.AddListener(OpenSelectionPanel);
+        monthDropdown.onValueChanged.AddListener(OnMonthDropdownValueChanged);
+    }
 
-        SetFilter(FilterType.Daily);
+    private void OnMonthDropdownValueChanged(int selectedIndex)
+    {
+        if (selectedIndex == 0)
+        {
+            selectedDateText.text = "All Trips";
+            GenerateTripTable(true);
+            return;
+        }
+        selectedMonth = new DateTime(DateTime.Now.Year, selectedIndex, 1);
+        selectedDateText.text = selectedMonth.ToString("MMMM yyyy");
+        GenerateTripTable();
     }
 
     private void LoadAllTrips()
     {
         UserData userData = JSONHelper.LoadFromJson<UserData>("userdata.json") ?? new UserData();
-        allTrips = userData.trips;  // Load trips from `UserData`
+        allTrips = userData.trips; 
+        GenerateTripTable();
     }
 
-    private void OpenSelectionPanel()
+    private void GenerateTripTable(bool showAllTrips = false)
     {
-        switch (filterType)
-        {
-            case FilterType.Daily:
-                CalenderScript.Instance.GenerateDailyCalendar(selectedDate.Year, selectedDate.Month);
-                headerText.text = selectedDate.ToString("MMMM yyyy");
-                break;
-            case FilterType.Weekly:
-                CalenderScript.Instance.GenerateWeeklyRanges(selectedDate.Year);
-                headerText.text = "Select a week";
-                break;
-            case FilterType.Monthly:
-                CalenderScript.Instance.GenerateMonthlySelection();
-                headerText.text = "Select a month";
-                break;
-        }
-    }
-
-    private void LoadTripsForDateRange(DateTime startDate, DateTime endDate)
-    {
-        selectedDateText.text = (startDate == endDate) ? startDate.ToString("dd MMMM yyyy") :
-            (startDate.Day == 1 && endDate.Day == DateTime.DaysInMonth(startDate.Year, startDate.Month)) ?
-            startDate.ToString("MMMM yyyy") : $"{startDate:dd MMM} - {endDate:dd MMM yyyy}";
-
         foreach (Transform child in tripContainer)
+        {
             Destroy(child.gameObject);
-
-        List<TripData> filteredTrips = allTrips
-            .Where(trip => trip.date.Date >= startDate.Date && trip.date.Date <= endDate.Date)
-            .ToList();
-
-        noTripsPanel.SetActive(filteredTrips.Count == 0);
-        tripContainer.gameObject.SetActive(filteredTrips.Count > 0);
-
-        if (filteredTrips.Count > 0)
-        {
-            GameObject tripItemObj = Instantiate(tripItemPrefab, tripContainer);
-            tripItemObj.GetComponent<TripItem>().SetTripData(filteredTrips, filterType);
-        }
-    }
-
-    public void SetFilter(FilterType filterType)
-    {
-        this.filterType = filterType;
-        DateTime today = DateTime.Now;
-
-        switch (filterType)
-        {
-            case FilterType.Daily:
-                LoadTripsForDateRange(today, today);
-                break;
-            case FilterType.Weekly:
-                DateTime weekStart = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday);
-                LoadTripsForDateRange(weekStart, weekStart.AddDays(6));
-                break;
-            case FilterType.Monthly:
-                DateTime monthStart = new DateTime(today.Year, today.Month, 1);
-                LoadTripsForDateRange(monthStart, monthStart.AddMonths(1).AddDays(-1));
-                break;
         }
 
-        UpdateButtonUI();
-    }
+        var filteredTrips = 
+        showAllTrips ? allTrips : allTrips.Where(trip => trip.date.Month == selectedMonth.Month && trip.date.Year == selectedMonth.Year).ToList();
 
-    private void UpdateButtonUI()
-    {
-        dailyButton.image.color = (filterType == FilterType.Daily) ? selectedColor : defaultColor;
-        weeklyButton.image.color = (filterType == FilterType.Weekly) ? selectedColor : defaultColor;
-        monthlyButton.image.color = (filterType == FilterType.Monthly) ? selectedColor : defaultColor;
-    }
+        if (filteredTrips.Count == 0)
+        {
+            noTripsPanel.SetActive(true);
+            return;
+        }
 
+        noTripsPanel.SetActive(false);
+
+        foreach (var trip in filteredTrips)
+        {
+            GameObject tripItem = Instantiate(tripItemPrefab, tripContainer);
+            var tripItemComponents = tripItem.GetComponent<TripItem>();
+            if (tripItemComponents != null)
+            {
+                tripItemComponents.SetTripData(trip);
+            }
+        }
+    }
+    
     public void ClosePopup()
     {
         gameObject.SetActive(false);

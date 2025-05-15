@@ -5,18 +5,18 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine.UI;
 
-public class TripManager : MonoBehaviour
+public class TripPopup : MonoBehaviour
 {
-    public static TripManager Instance { get; private set; }
+    public static TripPopup Instance { get; private set; }
 
     [Header("UI Elements")]
     [SerializeField] private Button confirmButton, dateSelectorButton, closeButton;
-    [SerializeField] private TMP_InputField startTripReading, endTripReading, earningsInput;
-    [SerializeField] private TMP_Text fuelCostText, dateText, distanceText;
+    [SerializeField] private TMP_InputField startTripReading, endTripReading, earningsInput,fuelPriceInput;
+    [SerializeField] private TMP_Text fuelCostText, dateText, distanceText, fuelPriceText;
     [SerializeField] private TMP_Text profitTitle, profitText;
     [SerializeField] private Image profitBG;
 
-    private float mileage, fuelPrice;
+    private float mileage;
     private UserData userData;
 
     private void Awake()
@@ -30,17 +30,14 @@ public class TripManager : MonoBehaviour
 
     private void OnEnable()
     {
-        CalenderScript.OnDateSelected += SetDate;
         ShowPopup();
     }
-
-    private void OnDisable() => CalenderScript.OnDateSelected -= SetDate;
 
     private void Start()
     {
         confirmButton.onClick.AddListener(AddTrip);
         closeButton.onClick.AddListener(ClosePopup);
-        dateSelectorButton.onClick.AddListener(() => CalenderScript.Instance.GenerateDailyCalendar(DateTime.Now.Year, DateTime.Now.Month));
+        dateSelectorButton.onClick.AddListener(() => GenerateCalender());
 
         startTripReading.onValueChanged.AddListener(_ => UpdateDynamicValues());
         endTripReading.onValueChanged.AddListener(_ => UpdateDynamicValues());
@@ -51,7 +48,7 @@ public class TripManager : MonoBehaviour
     {
         if (Instance == null)
         {
-            Instance = FindObjectOfType<TripManager>(true);
+            Instance = FindObjectOfType<TripPopup>(true);
             if (Instance == null) { Debug.LogError("TripManager is missing in the scene!"); return; }
         }
         Instance.ShowPopup();
@@ -62,10 +59,38 @@ public class TripManager : MonoBehaviour
         gameObject.SetActive(true);
         dateText.text = DateTime.Now.ToString("dd MMM yyyy");
         mileage = PlayerPrefs.GetFloat("Mileage", 40f);
-        fuelPrice = PlayerPrefs.GetFloat("FuelPrice", 103.93f);
         ResetInputs();
     }
+    #if UNITY_ANDROID
+        using UnityEngine.Android;
+    #endif
 
+    public void GenerateCalender()
+    {
+    #if UNITY_ANDROID
+        if (!Permission.HasUserAuthorizedPermission(Permission.CalendarRead))
+        {
+            Permission.RequestUserPermission(Permission.CalendarRead);
+        }
+
+        if (Permission.HasUserAuthorizedPermission(Permission.CalendarRead))
+        {
+            AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+            AndroidJavaObject currentActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+
+            AndroidJavaObject intent = new AndroidJavaObject("android.content.Intent", "android.intent.action.VIEW");
+            intent.Call<AndroidJavaObject>("setData", AndroidJavaObject.CallStatic<AndroidJavaObject>("android.net.Uri", "content://com.android.calendar/time"));
+            currentActivity.Call("startActivity", intent);
+        }
+        else
+        {
+            Debug.LogError("Calendar permission not granted.");
+        }
+    #else
+        Debug.LogError("Calendar integration is only supported on Android.");
+    #endif
+    }
+    
     private void SetDate(DateTime selectedDate, DateTime _)
     {
         dateText.text = selectedDate.ToString("dd MMM yyyy");
@@ -73,7 +98,7 @@ public class TripManager : MonoBehaviour
 
     private void AddTrip()
     {
-        if (!TryParseInputs(out float startOdo, out float endOdo, out float earnings)) return;
+        if (!TryParseInputs(out int startOdo, out int endOdo, out float earnings, out float fuelprice)) return;
 
         DateTime tripDate;
         if (!DateTime.TryParse(dateText.text, out tripDate))
@@ -90,7 +115,7 @@ public class TripManager : MonoBehaviour
             earnings = earnings
         };
 
-        newTrip.fuelExpense = (newTrip.distance / mileage) * fuelPrice;
+        newTrip.fuelExpense = (newTrip.distance / mileage) * fuelprice;
         newTrip.profit = newTrip.earnings - newTrip.fuelExpense;
 
         // Add trip to UserData
@@ -102,10 +127,10 @@ public class TripManager : MonoBehaviour
 
     private void UpdateDynamicValues()
     {
-        if (!TryParseInputs(out float startOdo, out float endOdo, out float earnings)) return;
+        if (!TryParseInputs(out int startOdo, out int endOdo, out float earnings, out float fuelprice)) return;
 
         float distance = Mathf.Max(endOdo - startOdo, 0);
-        float fuelExpense = (distance / mileage) * fuelPrice;
+        float fuelExpense = (distance / mileage) * fuelprice;
         float profit = earnings - fuelExpense;
 
         distanceText.text = $"{distance:F2} km";
@@ -117,13 +142,15 @@ public class TripManager : MonoBehaviour
         profitTitle.text = profit >= 0 ? "Profit" : "Loss";
     }
 
-    private bool TryParseInputs(out float startOdo, out float endOdo, out float earnings)
+    private bool TryParseInputs(out int startOdo, out int endOdo, out float earnings, out float fuelprice)
     {
-        startOdo = endOdo = earnings = 0f;
+        startOdo = endOdo = 0;
+        earnings = fuelprice = 0f;
 
-        bool valid = float.TryParse(startTripReading.text, out startOdo)
-                && float.TryParse(endTripReading.text, out endOdo)
-                && float.TryParse(earningsInput.text, out earnings);
+        bool valid = int.TryParse(startTripReading.text, out startOdo)
+                && int.TryParse(endTripReading.text, out endOdo)
+                && float.TryParse(earningsInput.text, out earnings)
+                && float.TryParse(fuelPriceInput.text, out fuelprice);
 
         if (!valid)
         {
@@ -175,16 +202,8 @@ public class DeductionData
 }
 
 [System.Serializable]
-public class ExpensesData
-{
-    public string reason;
-    public float amount;
-}
-
-[System.Serializable]
 public class UserData
 {
     public List<TripData> trips = new List<TripData>();
     public List<DeductionData> deductions = new List<DeductionData>();
-    public List<ExpensesData> expenses = new List<ExpensesData>();
 }
